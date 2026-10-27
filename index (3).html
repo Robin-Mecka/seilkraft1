@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f3a5f">
+<title>Seilkraft messen</title>
+<style>
+:root{
+  --bg:#e9edf1; --panel:#ffffff; --ink:#15212e; --muted:#5a6878; --line:#cfd7df;
+  --accent:#1f3a5f; --accent-ink:#ffffff; --soft:#dfe7f0;
+  --ok:#2e7d32; --warn:#a86400; --bad:#a51d1d; --plot:#1f3a5f; --plotgrid:#e3e8ed;
+  color-scheme:light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e151d; --panel:#16212c; --ink:#e4ebf2; --muted:#98a7b6; --line:#2a3846;
+    --accent:#8db4e2; --accent-ink:#0e151d; --soft:#1e2d3c;
+    --ok:#6cc070; --warn:#e0a84a; --bad:#f07a7a; --plot:#8db4e2; --plotgrid:#24323f;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e151d; --panel:#16212c; --ink:#e4ebf2; --muted:#98a7b6; --line:#2a3846;
+  --accent:#8db4e2; --accent-ink:#0e151d; --soft:#1e2d3c;
+  --ok:#6cc070; --warn:#e0a84a; --bad:#f07a7a; --plot:#8db4e2; --plotgrid:#24323f;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--accent)}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--accent);color:var(--accent-ink);padding:10px 16px;display:flex;align-items:center;gap:12px}
+.bar h1{font-size:18px;margin:0;font-weight:650;letter-spacing:.2px}
+.bar .proj{margin-left:auto;font-size:13px;opacity:.9;text-align:right;line-height:1.25;background:none;border:0;color:inherit;padding:6px 0;cursor:pointer}
+.bar .back{background:none;border:0;color:inherit;font-size:22px;line-height:1;padding:4px 8px 4px 0;cursor:pointer}
+main{max-width:760px;margin:0 auto;padding:14px 14px 40px}
+h2{font-size:17px;margin:22px 2px 8px;font-weight:650}
+h3{font-size:15px;margin:16px 2px 6px;font-weight:600;color:var(--muted)}
+p{margin:6px 2px}
+.muted{color:var(--muted)}
+.small{font-size:13px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 10px 9px;text-align:left;color:var(--ink);cursor:pointer;font:inherit}
+.tile b{display:block;font-size:20px;font-weight:650}
+.tile span{display:block;font-size:12px;color:var(--muted)}
+.tile.crit{border-left:4px solid var(--bad)}
+.tile:focus-visible,.btn:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:10px 16px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font:inherit;font-weight:600;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.big{width:100%;min-height:58px;font-size:18px}
+.btn.danger{color:var(--bad)}
+.btn[disabled]{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row>.btn{flex:1 1 auto}
+table.kv{width:100%;border-collapse:collapse;font-size:14px}
+table.kv td{padding:5px 2px;border-bottom:1px solid var(--line)}
+table.kv td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{flex:1;min-height:42px;border:0;background:var(--panel);color:var(--ink);font:inherit;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+.readout{text-align:center;padding:18px 10px 8px}
+.readout .val{font-size:64px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1}
+.readout .unit{font-size:22px;font-weight:500;color:var(--muted);margin-left:4px}
+.readout .sub{margin-top:8px;font-size:15px;color:var(--muted);font-variant-numeric:tabular-nums}
+.q{display:inline-block;padding:2px 9px;border-radius:999px;font-size:13px;font-weight:600;border:1px solid currentColor}
+.q.ok{color:var(--ok)} .q.warn{color:var(--warn)} .q.bad{color:var(--bad)} .q.idle{color:var(--muted)}
+.gauge{position:relative;height:30px;margin:16px 4px 26px;background:var(--soft);border-radius:6px}
+.gauge .fill{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:6px 0 0 6px;transition:width .4s}
+.gauge .mark{position:absolute;top:-5px;bottom:-5px;width:2px;background:var(--ink)}
+.gauge .mark.zul{background:var(--bad)}
+.gauge .mark i{position:absolute;top:36px;left:50%;transform:translateX(-50%);font-style:normal;font-size:11px;white-space:nowrap;color:var(--muted)}
+.gauge .mark.zul i{color:var(--bad)}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+.stats div{background:var(--soft);border-radius:8px;padding:8px;text-align:center}
+.stats b{display:block;font-size:17px;font-variant-numeric:tabular-nums}
+.stats span{font-size:12px;color:var(--muted)}
+canvas{width:100%;display:block}
+.progress{height:6px;background:var(--soft);border-radius:3px;overflow:hidden;margin:10px 0}
+.progress div{height:100%;background:var(--accent);width:0}
+.note{border-left:4px solid var(--warn);background:var(--panel);padding:10px 12px;border-radius:6px;margin:10px 0;font-size:14px}
+.note.err{border-left-color:var(--bad)}
+.list{display:flex;flex-direction:column;gap:6px}
+.item{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:10px 12px;display:flex;gap:10px;align-items:center}
+.item .grow{flex:1;min-width:0}
+.item small{display:block;color:var(--muted)}
+label.f{display:block;font-size:13px;color:var(--muted);margin:8px 2px 3px}
+input,select{width:100%;min-height:42px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:0 10px}
+details{margin-top:10px}
+summary{cursor:pointer;font-weight:600;padding:6px 2px}
+.tbar{display:flex;gap:6px;margin:14px 0 6px}
+.tbar .btn{flex:1}
+@media (prefers-reduced-motion: reduce){.gauge .fill{transition:none}}
+</style>
+</head>
+<body>
+<header class="bar" id="bar"></header>
+<main id="app"></main>
+<script>
+// ===== Auswertung: Spektrum, Kammsuche, Seilkraft =====
+function nextPow2(n){let p=1;while(p<n)p<<=1;return p;}
+function fftInPlace(re,im){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){let bit=n>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){let t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t;}}
+  for(let len=2;len<=n;len<<=1){const ang=-2*Math.PI/len,wr=Math.cos(ang),wi=Math.sin(ang);
+    for(let i=0;i<n;i+=len){let cr=1,ci=0;
+      for(let j=0;j<len/2;j++){const a=i+j,b=a+len/2;const xr=re[b]*cr-im[b]*ci,xi=re[b]*ci+im[b]*cr;
+        re[b]=re[a]-xr;im[b]=im[a]-xi;re[a]+=xr;im[a]+=xi;const t=cr*wr-ci*wi;ci=cr*wi+ci*wr;cr=t;}}}
+}
+function median(a){const s=Float64Array.from(a).sort();const n=s.length;if(!n)return NaN;return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2;}
+// Gleichmäßig abtasten (lineare Interpolation), Mittelwert und linearen Trend entfernen
+function resample(samples){
+  const n=samples.length; if(n<64) return null;
+  const t0=samples[0].t; const dts=[];
+  for(let i=1;i<n;i++){const d=samples[i].t-samples[i-1].t;if(d>0)dts.push(d);}
+  const dt=median(dts); if(!(dt>0)) return null;
+  const fs=1/dt; const T=samples[n-1].t-t0; const N=Math.floor(T*fs);
+  const out=[new Float64Array(N),new Float64Array(N),new Float64Array(N)];
+  let j=0;
+  for(let i=0;i<N;i++){const t=t0+i*dt; while(j<n-2&&samples[j+1].t<t)j++;
+    const a=samples[j],b=samples[j+1]; const w=(b.t>a.t)?Math.min(1,Math.max(0,(t-a.t)/(b.t-a.t))):0;
+    out[0][i]=a.x+(b.x-a.x)*w; out[1][i]=a.y+(b.y-a.y)*w; out[2][i]=a.z+(b.z-a.z)*w;}
+  for(const s of out){ // linearen Trend entfernen
+    let sx=0,sy=0,sxx=0,sxy=0; for(let i=0;i<N;i++){sx+=i;sy+=s[i];sxx+=i*i;sxy+=i*s[i];}
+    const b=(N*sxy-sx*sy)/(N*sxx-sx*sx), a=(sy-b*sx)/N; for(let i=0;i<N;i++) s[i]-=a+b*i; }
+  return {fs,N,axes:out,duration:T};
+}
+// Amplitudenspektrum (Summe der Leistung aller drei Achsen, Hann-Fenster, Nullauffüllung)
+function spectrum(rs){
+  const N=rs.N, nfft=Math.min(1<<17,nextPow2(N)*2);
+  const P=new Float64Array(nfft/2);
+  for(const s of rs.axes){const re=new Float64Array(nfft),im=new Float64Array(nfft);
+    for(let i=0;i<N;i++){re[i]=s[i]*(0.5-0.5*Math.cos(2*Math.PI*i/(N-1)));}
+    fftInPlace(re,im); for(let k=0;k<nfft/2;k++)P[k]+=re[k]*re[k]+im[k]*im[k];}
+  const amp=new Float64Array(nfft/2); for(let k=0;k<amp.length;k++)amp[k]=Math.sqrt(P[k]);
+  return {df:rs.fs/nfft, amp};
+}
+function peakFreq(sp,i){ // parabolische Interpolation (logarithmisch)
+  const a=sp.amp; if(i<=0||i>=a.length-1) return i*sp.df;
+  const l=Math.log(a[i-1]+1e-30),c=Math.log(a[i]+1e-30),r=Math.log(a[i+1]+1e-30);
+  const den=l-2*c+r; const d=den!==0?0.5*(l-r)/den:0; return (i+Math.max(-0.5,Math.min(0.5,d)))*sp.df;
+}
+// Kammsuche: Grundfrequenz, deren Obertonraster am besten zu den Spektralspitzen passt
+function combSearch(sp,fLo,fHi,fMax,nModes,tol){
+  const a=sp.amp, iMax=Math.min(a.length-2,Math.floor(fMax/sp.df)), iMin=Math.max(1,Math.floor(0.2/sp.df));
+  const band=Array.from(a.slice(iMin,iMax)); const noise=Math.max(median(band),1e-30); const mx=Math.max(...band);
+  const thr=Math.max(0.02*mx,3*noise); const pk=[];
+  for(let i=iMin;i<iMax;i++) if(a[i]>a[i-1]&&a[i]>=a[i+1]&&a[i]>=thr) pk.push(i);
+  if(pk.length<2) return null;
+  const pf=pk.map(i=>peakFreq(sp,i)), pa=pk.map(i=>a[i]);
+  const step=Math.max(sp.df/4,fLo*0.002); let best=null;
+  for(let f0=fLo;f0<=fHi;f0+=step){let hits=[],sc=0;
+    for(let k=1;k<=nModes;k++){const fk=k*f0;if(fk>fMax)break;let bj=-1,bd=1e9;
+      for(let j=0;j<pf.length;j++){const d=Math.abs(pf[j]-fk);if(d<bd){bd=d;bj=j;}}
+      if(bd<=tol*fk){hits.push([k,pf[bj]]);sc+=pa[bj];}}
+    if(!best||hits.length>best.n||(hits.length===best.n&&sc>best.sc))best={n:hits.length,sc,hits};}
+  if(!best||best.n<2) return null;
+  return median(best.hits.map(([k,f])=>f/k));
+}
+// Seilkraft aus einer Eigenfrequenz (Statik 2023, mit Biegesteifigkeit), Ergebnis in N
+function forceFromFreq(f,k,L,EI,m){
+  const B=(2/L)*Math.sqrt(EI)-(2*f*L/k)*Math.sqrt(m), C=4+k*k*Math.PI*Math.PI/2;
+  const inner=B*B-4*(EI/(L*L))*C; if(inner<0) return NaN; const r=-B+Math.sqrt(inner); return 0.25*r*r;
+}
+// Eigenfrequenz aus Seilkraft (für das Testsignal)
+function freqFromForce(F,k,L,EI,m){const x=EI/(F*L*L);return k/(2*L)*Math.sqrt(F/m)*(1+2*Math.sqrt(x)+(4+k*k*Math.PI*Math.PI/2)*x);}
+// Gesamtauswertung
+function analyze(samples,cable,opt={}){
+  const rs=resample(samples); if(!rs||rs.duration<8) return {ok:false,reason:'zu kurz'};
+  const sp=spectrum(rs); const fMax=Math.min(opt.fMax||25,0.45*rs.fs); const nModes=opt.nModes||10;
+  const EI=cable.E*cable.I, L=cable.L, m=cable.m;
+  let f1=null;
+  if(cable.f1) f1=combSearch(sp,cable.f1*0.8,cable.f1*1.2,fMax,nModes,0.025);
+  if(!f1) f1=combSearch(sp,0.3,Math.min(8,fMax/2),fMax,nModes,0.025);
+  if(!f1) return {ok:false,reason:'keine Grundfrequenz',fs:rs.fs,sp,fMax};
+  const modes=[];
+  for(let k=1;k<=nModes;k++){const fk=k*f1;if(fk>fMax)break;
+    const i0=Math.max(1,Math.floor(fk*0.94/sp.df)),i1=Math.min(sp.amp.length-2,Math.ceil(fk*1.06/sp.df));
+    let bi=-1,ba=0; for(let i=i0;i<=i1;i++) if(sp.amp[i]>ba&&sp.amp[i]>=sp.amp[i-1]&&sp.amp[i]>=sp.amp[i+1]){ba=sp.amp[i];bi=i;}
+    if(bi<0) continue; const f=peakFreq(sp,bi); const F=forceFromFreq(f,k,L,EI,m);
+    if(isFinite(F)) modes.push({k,f,F,amp:ba});}
+  if(modes.length<2) return {ok:false,reason:'zu wenige Eigenformen',fs:rs.fs,sp,fMax,f1};
+  const med=median(modes.map(x=>x.F));
+  modes.forEach(x=>x.used=Math.abs(x.F/med-1)<=0.10);
+  const used=modes.filter(x=>x.used); const Fm=used.reduce((s,x)=>s+x.F,0)/used.length;
+  const sd=Math.sqrt(used.reduce((s,x)=>s+(x.F-Fm)**2,0)/Math.max(1,used.length-1));
+  return {ok:true,fs:rs.fs,duration:rs.duration,f1,modes,F:Fm,cv:sd/Fm,nUsed:used.length,sp,fMax};
+}
+// ===== Startprojekt (leer); Projektdaten werden als JSON geladen =====
+const DRAEHTE={II:16,III:24,IV:32,V:42};
+function cab(id,typ,m,L,E,I,f1,soll,zul,verkehr,f2021,ref){
+  const seite=id[0], nr=+id.slice(1);
+  return {id,seite,nr,feld:nr<=7?'Nebenfeld':'Hauptfeld',typ,draehte:DRAEHTE[typ],m,L,E,I,f1,soll,zul,verkehr,f2021,ref};
+}
+const BUILTIN_PROJECT={id:'start',builtin:true,name:'Neues Projekt',nummer:'',hinweis:'Projekt unter „Projekte“ laden (JSON) oder Seile unter „Projekt bearbeiten“ anlegen.',cables:[]};
+
+// ===== Speicher (nur in diesem Browser) =====
+const KEY='seilkraft.app.v1';
+let store=load();
+function load(){
+  let s=null; try{ s=JSON.parse(localStorage.getItem(KEY)||'null'); }catch(e){}
+  if(!s||!Array.isArray(s.projects)) s={projects:[],active:null,history:[]};
+  if(!s.projects.some(p=>p.id===BUILTIN_PROJECT.id)) s.projects.unshift(JSON.parse(JSON.stringify(BUILTIN_PROJECT)));
+  if(!s.active||!s.projects.some(p=>p.id===s.active)) s.active=s.projects[0].id;
+  if(!Array.isArray(s.history)) s.history=[];
+  return s;
+}
+function persist(){ try{ localStorage.setItem(KEY,JSON.stringify(store)); }catch(e){ toast('Speichern im Browser nicht möglich; Daten bitte als Datei sichern.'); } }
+const proj=()=>store.projects.find(p=>p.id===store.active);
+
+// ===== Hilfen =====
+const nf=(v,d=1)=>(v==null||!isFinite(v))?'–':v.toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=id=>document.getElementById(id);
+function toast(msg){ const n=document.createElement('div'); n.className='note'; n.textContent=msg; n.style.cssText='position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:20;max-width:736px;margin:auto'; document.body.appendChild(n); setTimeout(()=>n.remove(),3500); }
+function stamp(d=new Date()){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`; }
+// Texte in CSV nicht als Excel-Formel interpretieren lassen
+const safeText=s=>{ s=String(s??'').replace(/[;\r\n]/g,' '); return /^[=+\-@\t]/.test(s)?"'"+s:s; };
+const dec=v=>{ if(v==null) return ''; if(typeof v==='number') return isFinite(v)?String(v).replace('.',','):''; return String(v).replace(/^(-?\d+)\.(\d+)$/,'$1,$2'); };
+
+// ===== Datei speichern: im Claude-Viewer über "downloads", sonst klassischer Download =====
+let downloadsNS=null;
+if(window.claude&&typeof window.claude.use==='function'){ window.claude.use('downloads').then(ns=>{downloadsNS=ns;}).catch(()=>{}); }
+async function saveFile(filename,text){
+  if(downloadsNS){
+    try{ await downloadsNS.save({filename,data:text}); toast('Gespeichert: '+filename); return; }
+    catch(e){ if(e&&e.code==='declined') return; toast('Speichern nicht möglich ('+(e&&e.code||'Fehler')+').'); return; }
+  }
+  if(window.claude){ toast('Speichern ist in dieser Ansicht nicht verfügbar.'); return; }
+  const blob=new Blob(['\ufeff'+text],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+}
+
+// ===== Navigation =====
+let view={name:'cables'};
+function go(v){ view=v; render(); window.scrollTo(0,0); }
+function header(title,back){
+  const p=proj();
+  $('bar').innerHTML=`${back?`<button class="back" data-a="back" aria-label="Zurück">‹</button>`:''}<h1>${esc(title)}</h1>
+  <button class="proj" data-a="projects" aria-label="Projekt wechseln">${esc(p.name)}<br><span style="opacity:.75">${esc(p.nummer||'')}</span></button>`;
+}
+function render(){
+  if(meas&&view.name!=='measure') stopMeasurement(true);
+  ({cables:vCables,cable:vCable,measure:vMeasure,history:vHistory,projects:vProjects,edit:vEdit}[view.name]||vCables)();
+}
+
+// ===== Ansicht: Seilauswahl =====
+function vCables(){
+  header('Seilkraft',false); const p=proj();
+  const last={}; store.history.filter(h=>h.projectId===p.id).forEach(h=>{ if(!last[h.cableId]||h.start>last[h.cableId].start) last[h.cableId]=h; });
+  const side=s=>p.cables.filter(c=>c.seite===s).sort((a,b)=>a.nr-b.nr);
+  const tile=c=>{ const l=last[c.id]; const crit=c.ref&&c.zul&&(c.ref+(c.verkehr||0))/c.zul>1;
+    return `<button class="tile${crit?' crit':''}" data-a="cable" data-id="${esc(c.id)}"><b>${esc(c.id)}</b><span>Typ ${esc(c.typ)}, ${nf(c.L,1)} m</span><span>${l?nf(l.F,0)+' kN am '+new Date(l.start).toLocaleDateString('de-DE'):'noch nicht gemessen'}</span></button>`; };
+  const others=p.cables.filter(c=>c.seite!=='O'&&c.seite!=='U');
+  $('app').innerHTML=`
+  <p class="muted small">Seil wählen, Handy am Seil befestigen, Messung starten.${p.cables.some(c=>c.ref)?' Rot markiert: Seile über der zulässigen Kraft im Gebrauchszustand.':''}</p>
+  ${['O','U'].map(s=>side(s).length?`<h2>${s==='O'?'Oberstrom':'Unterstrom'}</h2><div class="grid">${side(s).map(tile).join('')}</div>`:'').join('')}
+  ${others.length?`<h2>Weitere Seile</h2><div class="grid">${others.map(tile).join('')}</div>`:''}
+  ${p.cables.length?'':'<div class="note">Dieses Projekt enthält noch keine Seile. Unter „Projekt bearbeiten“ Seile anlegen.</div>'}
+  <div class="tbar"><button class="btn" data-a="history">Messungen</button><button class="btn" data-a="edit">Projekt bearbeiten</button></div>`;
+}
+
+// ===== Ansicht: Seil und Messeinstellungen =====
+let duration=120;
+function vCable(){
+  const p=proj(), c=p.cables.find(x=>x.id===view.id); header('Seil '+c.id,true);
+  const row=(k,v)=>`<tr><td>${k}</td><td>${v}</td></tr>`;
+  $('app').innerHTML=`
+  <div class="panel">
+    <table class="kv">
+      ${row('Lage',`${c.seite==='O'?'Oberstrom':c.seite==='U'?'Unterstrom':esc(c.seite)}, ${esc(c.feld||'')}`)}
+      ${row('Typ, Drähte',`${esc(c.typ)}, ${esc(c.draehte??'–')}`)}
+      ${row('Länge L',nf(c.L,2)+' m')}
+      ${row('Masse m',nf(c.m,2)+' kg/m')}
+      ${row('Biegesteifigkeit EI',nf(c.E*c.I/1000,1)+' kNm²')}
+      ${row('erwartete Grundfrequenz',c.f1?nf(c.f1,2)+' Hz':'unbekannt')}
+      ${row('zulässige Kraft',c.zul?nf(c.zul,0)+' kN':'–')}
+      ${row('planmäßige Kraft (SOLL)',c.soll?nf(c.soll,0)+' kN':'–')}
+      ${row('Messung 2021',c.f2021?nf(c.f2021,0)+' kN':'–')}
+      ${row('Bezugswert Monitoring',c.ref?nf(c.ref,0)+' kN':'–')}
+    </table>
+  </div>
+  <h2>Messdauer</h2>
+  <div class="seg" role="group" aria-label="Messdauer">${[[60,'60 s'],[120,'2 min'],[300,'5 min'],[0,'bis Stopp']].map(([v,l])=>`<button data-a="dur" data-v="${v}" aria-pressed="${duration===v}">${l}</button>`).join('')}</div>
+  <p class="muted small">Empfohlen sind mindestens 2 Minuten. Längere Messungen verbessern die Genauigkeit.</p>
+  <div style="margin-top:16px"><button class="btn primary big" data-a="start">Messung starten</button></div>
+  <div class="row" style="margin-top:8px"><button class="btn" data-a="sim">Testsignal ohne Sensor</button></div>
+  <details><summary>So wird gemessen</summary>
+    <ol class="small" style="padding-left:20px;margin:6px 0">
+      <li>Handy mit Klebeband oder Gurt fest am Seil befestigen, mindestens 2 m oberhalb der Verankerung; es darf nicht wackeln oder klappern.</li>
+      <li>Bildschirm entsperren und Messung starten. Beim ersten Start fragt das Handy nach dem Zugriff auf die Bewegungssensoren.</li>
+      <li>Seil kräftig anregen, zum Beispiel mit der Hand anschlagen oder seitlich auslenken und loslassen; bei Wind schwingt es oft schon ausreichend.</li>
+      <li>Während der Messung Seil und Handy nicht berühren. Die Seilkraft erscheint nach etwa 10 Sekunden und wird laufend genauer.</li>
+      <li>Nach der Messung Rohdaten und Ergebnis als CSV speichern.</li>
+    </ol>
+  </details>`;
+}
+
+// ===== Messung =====
+let meas=null; // {cable, samples, start, stopFn, timer, aTimer, sim, last, history}
+async function startSensor(onSample){
+  if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function'){
+    let r='denied'; try{ r=await DeviceMotionEvent.requestPermission(); }catch(e){}
+    if(r!=='granted') throw new Error(window.self!==window.top?'Safari gibt die Bewegungssensoren in der eingebetteten Claude-Ansicht nicht frei.':'Der Zugriff auf Bewegung und Ausrichtung wurde abgelehnt.');
+  }
+  if('Accelerometer' in window){
+    try{
+      const acc=new Accelerometer({frequency:100}); let failed=false;
+      acc.addEventListener('reading',()=>onSample((acc.timestamp||performance.now())/1000,acc.x,acc.y,acc.z));
+      acc.addEventListener('error',()=>{failed=true;});
+      acc.start(); await new Promise(r=>setTimeout(r,400));
+      if(!failed) return {stop:()=>acc.stop(),source:'Accelerometer'};
+      acc.stop();
+    }catch(e){}
+  }
+  const h=e=>{ const a=e.accelerationIncludingGravity||e.acceleration; if(!a||a.x==null) return;
+    const t=(e.timeStamp&&e.timeStamp>0?e.timeStamp:performance.now())/1000; onSample(t,a.x,a.y,a.z); };
+  window.addEventListener('devicemotion',h);
+  return {stop:()=>window.removeEventListener('devicemotion',h),source:'devicemotion'};
+}
+function startSim(c,onSample){ // synthetisches Seilsignal, 60 Hz, aus Bezugswert bzw. Messung 2021
+  const F=((c.ref||c.f2021||c.soll||500))*1000, EI=c.E*c.I; const fk=[];
+  for(let k=1;k<=10;k++) fk.push(freqFromForce(F*(1+0.004*Math.sin(k)),k,c.L,EI,c.m));
+  let t=0; const t0=performance.now()/1000;
+  const id=setInterval(()=>{ const now=performance.now()/1000-t0; while(t<now){
+      let s=0; fk.forEach((f,i)=>{s+=(0.06/(i+1))*Math.sin(2*Math.PI*f*t+i);});
+      const n=()=>0.03*(Math.random()-0.5);
+      onSample(t,0.3*s+n(),9.81+0.6*s+n(),0.15*s+n()); t+=1/60; } },50);
+  return {stop:()=>clearInterval(id),source:'Testsignal'};
+}
+let wakeLock=null;
+async function startMeasurement(sim){
+  const c=proj().cables.find(x=>x.id===view.id);
+  meas={cable:c,samples:[],start:new Date(),sim,trend:[],last:null,done:false};
+  go({name:'measure',id:c.id});
+  try{
+    const add=(t,x,y,z)=>{ if(!meas||meas.done) return; meas.samples.push({t,x,y,z}); };
+    meas.src=sim?startSim(c,add):await startSensor(add);
+  }catch(e){ showSensorError(e.message||String(e)); return; }
+  meas.t0ms=performance.now();
+  try{ if('wakeLock' in navigator) wakeLock=await navigator.wakeLock.request('screen'); }catch(e){}
+  meas.timer=setInterval(tick,250);
+  meas.aTimer=setInterval(liveAnalysis,2000);
+  setTimeout(()=>{ if(meas&&!meas.done&&meas.samples.length<10) showSensorError('Der Sensor liefert keine Daten.'); },3000);
+}
+function showSensorError(msg){
+  if(meas){ meas.done=true; clearInterval(meas.timer); clearInterval(meas.aTimer); try{meas.src&&meas.src.stop();}catch(e){} }
+  const box=$('msg'); if(!box) return;
+  box.innerHTML=`<div class="note err"><b>${esc(msg)}</b><br>${window.self!==window.top
+    ?'Die App läuft hier eingebettet; in dieser Form stellt das Handy keine Sensordaten bereit. Für Messungen die Datei Seilkraft_App.html als eigene Seite über HTTPS öffnen (Firmenserver, GitHub Pages) und dort in Safari beziehungsweise Chrome starten. Hier steht nur das Testsignal zur Verfügung.'
+    :(location.protocol!=='https:'
+      ?'Die Seite wurde nicht über HTTPS geladen. Bewegungssensoren stehen nur auf HTTPS-Seiten zur Verfügung.'
+      :'Safari merkt sich eine Ablehnung. Seite neu laden oder unter Einstellungen, Safari, Erweitert, Website-Daten die Daten dieser Seite löschen; danach erneut starten und bei der Abfrage „Erlauben“ wählen. Unter Android in Chrome über das Schloss-Symbol neben der Adresse die Bewegungssensoren freigeben.')}</div>
+  <div class="row"><button class="btn" data-a="back">Zurück</button></div>`;
+}
+function tick(){
+  if(!meas||meas.done) return;
+  if(!meas.t0ms) return; const el=(performance.now()-meas.t0ms)/1000;
+  const n=meas.samples.length; const fs=n>20?(n-1)/(meas.samples[n-1].t-meas.samples[0].t):0;
+  if($('elapsed')) $('elapsed').textContent=`${Math.floor(el/60)}:${String(Math.floor(el%60)).padStart(2,'0')} min${duration?' von '+Math.floor(duration/60)+':'+String(duration%60).padStart(2,'0'):''}, ${nf(fs,0)} Hz, ${n.toLocaleString('de-DE')} Werte`;
+  if($('prog')) $('prog').style.width=duration?Math.min(100,el/duration*100)+'%':'100%';
+  if(duration&&el>=duration) finishMeasurement();
+}
+function liveAnalysis(){
+  if(!meas||meas.done) return;
+  const r=analyze(meas.samples,meas.cable); meas.last=r;
+  if(r.ok) meas.trend.push(r.F/1000);
+  updateLive(r,false);
+}
+function finishMeasurement(){
+  if(!meas||meas.done) return;
+  meas.done=true; clearInterval(meas.timer); clearInterval(meas.aTimer);
+  try{ meas.src&&meas.src.stop(); }catch(e){}
+  try{ wakeLock&&wakeLock.release(); }catch(e){} wakeLock=null;
+  const r=analyze(meas.samples,meas.cable); meas.last=r; meas.end=new Date();
+  if(r.ok){
+    const c=meas.cable; const h={id:'m'+Date.now(),projectId:store.active,cableId:c.id,start:meas.start.toISOString(),
+      dauer:r.duration,fs:r.fs,f1:r.f1,F:r.F/1000,cv:r.cv,nModes:r.nUsed,quelle:meas.src?meas.src.source:'',
+      modes:r.modes.map(m=>({k:m.k,f:m.f,F:m.F/1000,used:m.used}))};
+    store.history.push(h); persist(); meas.saved=h;
+  }
+  updateLive(r,true);
+}
+function stopMeasurement(silent){ if(meas&&!meas.done){ if(silent){ meas.done=true; clearInterval(meas.timer); clearInterval(meas.aTimer); try{meas.src.stop();}catch(e){} } else finishMeasurement(); } }
+
+function quality(r){
+  if(!r||!r.ok) return ['idle','wartet auf Signal'];
+  if(r.nUsed>=3&&r.cv<=0.03) return ['ok','gut'];
+  if(r.nUsed>=2&&r.cv<=0.08) return ['warn','ausreichend'];
+  return ['bad','unsicher'];
+}
+function vMeasure(){
+  const c=meas?meas.cable:proj().cables.find(x=>x.id===view.id); header('Messung '+c.id,true);
+  $('app').innerHTML=`
+  <div id="msg"></div>
+  <div class="panel">
+    <div class="readout"><div><span class="val" id="fval">–</span><span class="unit">kN</span></div>
+      <div class="sub" id="fsub">Seil anregen; erster Wert nach etwa 10 Sekunden</div>
+      <div style="margin-top:8px"><span class="q idle" id="qual">wartet auf Signal</span></div></div>
+    <div class="gauge" id="gauge"></div>
+    <div class="stats">
+      <div><b id="s_f1">–</b><span>Grundfrequenz</span></div>
+      <div><b id="s_n">–</b><span>Eigenformen</span></div>
+      <div><b id="s_cv">–</b><span>Streuung</span></div>
+    </div>
+    <div class="progress"><div id="prog"></div></div>
+    <div class="small muted" id="elapsed">Sensor wird gestartet …</div>
+  </div>
+  <h3>Spektrum</h3>
+  <div class="panel" style="padding:8px"><canvas id="spec" height="190"></canvas></div>
+  <div id="actions" style="margin-top:14px"><button class="btn primary big" data-a="stop">Messung beenden</button></div>`;
+  drawGauge(null,c);
+}
+function drawGauge(F,c){
+  const g=$('gauge'); if(!g) return;
+  const top=Math.max(c.zul||0,c.soll||0,c.ref||0,F||0,1)*1.15;
+  const pos=v=>Math.max(0,Math.min(100,v/top*100))+'%';
+  let h=`<div class="fill" style="width:${F?pos(F):0}"></div>`;
+  if(c.soll) h+=`<div class="mark" style="left:${pos(c.soll)}"><i>SOLL</i></div>`;
+  if(c.ref) h+=`<div class="mark" style="left:${pos(c.ref)};opacity:.55"><i style="top:-19px">Bezug</i></div>`;
+  if(c.zul) h+=`<div class="mark zul" style="left:${pos(c.zul)}"><i>zulässig</i></div>`;
+  g.innerHTML=h;
+}
+function updateLive(r,final){
+  const c=meas.cable;
+  if(r&&r.ok){
+    const F=r.F/1000; $('fval').textContent=nf(F,0);
+    const parts=[]; if(c.zul) parts.push(`${nf(F/c.zul*100,0)} % zulässig`); if(c.zul&&c.verkehr) parts.push(`${nf((F+c.verkehr)/c.zul*100,0)} % mit Verkehr`);
+    if(c.ref) parts.push(`${F>=c.ref?'+':''}${nf((F/c.ref-1)*100,1)} % zum Bezug`);
+    $('fsub').textContent=parts.join(', ');
+    $('s_f1').textContent=nf(r.f1,3)+' Hz'; $('s_n').textContent=r.nUsed+' von '+r.modes.length; $('s_cv').textContent=nf(r.cv*100,1)+' %';
+    drawGauge(F,c);
+  }else if(r){ $('fsub').textContent=r.reason==='zu kurz'?'Messung läuft; erster Wert nach etwa 10 Sekunden':'Noch kein klares Signal: Seil kräftiger anregen ('+r.reason+')'; }
+  const [cls,txt]=quality(r); const q=$('qual'); q.className='q '+cls; q.textContent=final?(r&&r.ok?'Ergebnis: '+txt:'keine Auswertung möglich'):txt;
+  if(r&&r.sp) drawSpectrum(r,c);
+  if(final){
+    $('elapsed').textContent=`Messung beendet: ${nf(r&&r.duration||0,0)} s, ${meas.samples.length.toLocaleString('de-DE')} Werte, ${nf(r&&r.fs||0,0)} Hz (${meas.src?meas.src.source:''})`;
+    $('prog').style.width='100%';
+    $('actions').innerHTML=`<div class="row"><button class="btn primary" data-a="saveraw">Rohdaten speichern (CSV)</button><button class="btn" data-a="saveres">Ergebnis speichern (CSV)</button></div>
+      <p class="small muted">${r&&r.ok?'Das Ergebnis ist in der Liste der Messungen gesichert. ':''}Die Rohdaten stehen nur bis zum Verlassen dieser Ansicht zur Verfügung.</p>
+      <div class="row" style="margin-top:8px"><button class="btn" data-a="again">Neue Messung</button><button class="btn" data-a="home">Anderes Seil</button></div>
+      ${r&&r.ok?`<details><summary>Eigenformen</summary><table class="kv">${r.modes.map(m=>`<tr><td>${m.k}. Eigenform, ${nf(m.f,3)} Hz${m.used?'':' (verworfen)'}</td><td>${nf(m.F/1000,1)} kN</td></tr>`).join('')}</table></details>`:''}`;
+  }
+}
+function drawSpectrum(r,c){
+  const cv=$('spec'); if(!cv) return; const dpr=window.devicePixelRatio||1; const W=cv.clientWidth, H=190;
+  cv.width=W*dpr; cv.height=H*dpr; const g=cv.getContext&&cv.getContext('2d'); if(!g) return; g.scale(dpr,dpr);
+  const cs=getComputedStyle(document.documentElement); const col=n=>cs.getPropertyValue(n).trim();
+  g.clearRect(0,0,W,H); const L=8,R=W-6,T=6,B=H-22;
+  const sp=r.sp, iMax=Math.min(sp.amp.length-1,Math.floor(r.fMax/sp.df)), i0=Math.floor(0.2/sp.df);
+  let mx=0; for(let i=i0;i<=iMax;i++) mx=Math.max(mx,sp.amp[i]); const lo=mx*1e-3;
+  const X=f=>L+(R-L)*f/r.fMax, Y=a=>B-(B-T)*Math.max(0,Math.log10(Math.max(a,lo)/lo))/3;
+  g.strokeStyle=col('--plotgrid'); g.lineWidth=1; g.fillStyle=col('--muted'); g.font='11px system-ui';
+  for(let f=0;f<=r.fMax;f+=5){ g.beginPath(); g.moveTo(X(f),T); g.lineTo(X(f),B); g.stroke(); g.fillText(f+' Hz',X(f)+2,H-6); }
+  if(r.ok){ g.strokeStyle=col('--bad'); g.setLineDash([3,3]);
+    r.modes.forEach(m=>{ g.globalAlpha=m.used?0.8:0.3; g.beginPath(); g.moveTo(X(m.f),T); g.lineTo(X(m.f),B); g.stroke(); });
+    g.setLineDash([]); g.globalAlpha=1; }
+  g.strokeStyle=col('--plot'); g.lineWidth=1.2; g.beginPath();
+  const step=Math.max(1,Math.floor((iMax-i0)/(W*2)));
+  for(let i=i0;i<=iMax;i+=step){ let a=0; for(let j=i;j<i+step&&j<=iMax;j++) a=Math.max(a,sp.amp[j]); const x=X(i*sp.df),y=Y(a); i===i0?g.moveTo(x,y):g.lineTo(x,y); }
+  g.stroke();
+}
+
+// ===== CSV =====
+function csvRaw(){
+  const c=meas.cable, p=proj(), r=meas.last||{};
+  const head=[['Projekt',safeText(p.name+' ('+(p.nummer||'')+')')],['Seil',safeText(c.id)],['Messbeginn',meas.start.toISOString()],['Quelle',meas.src?meas.src.source:''],
+    ['Laenge_m',dec(c.L)],['Masse_kg_m',dec(c.m)],['E_N_m2',dec(c.E)],['I_m4',dec(c.I)],['f1_erwartet_Hz',dec(c.f1)],
+    ['Abtastrate_Hz',dec(r.fs&&+r.fs.toFixed(2))],['Grundfrequenz_Hz',dec(r.f1&&+r.f1.toFixed(4))],['Seilkraft_kN',dec(r.F&&+(r.F/1000).toFixed(1))],
+    ['Streuung_Eigenformen_Prozent',dec(r.cv&&+(r.cv*100).toFixed(2))],['Eigenformen',r.nUsed??''],['zul_kN',dec(c.zul)]];
+  const t0=meas.samples.length?meas.samples[0].t:0;
+  const lines=head.map(([k,v])=>'# '+k+';'+v);
+  lines.push('t_s;ax_m_s2;ay_m_s2;az_m_s2');
+  for(const s of meas.samples) lines.push([(s.t-t0).toFixed(4),s.x.toFixed(5),s.y.toFixed(5),s.z.toFixed(5)].map(dec).join(';'));
+  return lines.join('\r\n');
+}
+function csvResults(list){
+  const p=proj(); const cols=['Projekt','Seil','Messbeginn','Dauer_s','Abtastrate_Hz','Grundfrequenz_Hz','Seilkraft_kN','Streuung_Prozent','Eigenformen','zul_kN','Ausnutzung_Prozent','Ausnutzung_mit_Verkehr_Prozent','Bezugswert_kN','Abweichung_Bezug_Prozent','Quelle'];
+  const rows=list.map(h=>{ const c=p.cables.find(x=>x.id===h.cableId)||{};
+    return [safeText(p.name),safeText(h.cableId),h.start,(+h.dauer).toFixed(0),(+h.fs).toFixed(1),(+h.f1).toFixed(4),(+h.F).toFixed(1),(h.cv*100).toFixed(2),h.nModes,c.zul??'',
+      c.zul?(h.F/c.zul*100).toFixed(1):'',c.zul&&c.verkehr?((h.F+c.verkehr)/c.zul*100).toFixed(1):'',c.ref??'',c.ref?((h.F/c.ref-1)*100).toFixed(2):'',h.quelle||''].map(dec).join(';'); });
+  return [cols.join(';'),...rows].join('\r\n');
+}
+
+// ===== Ansicht: Messungen =====
+function vHistory(){
+  header('Messungen',true); const p=proj();
+  const list=store.history.filter(h=>h.projectId===p.id).sort((a,b)=>b.start.localeCompare(a.start));
+  $('app').innerHTML=list.length?`
+    <div class="row" style="margin-bottom:10px"><button class="btn primary" data-a="exportall">Alle Ergebnisse speichern (CSV)</button></div>
+    <div class="list">${list.map(h=>{ const c=p.cables.find(x=>x.id===h.cableId)||{}; const u=c.zul?h.F/c.zul*100:null;
+      return `<div class="item"><div class="grow"><b>${esc(h.cableId)}: ${nf(h.F,0)} kN</b><small>${new Date(h.start).toLocaleString('de-DE')}, ${nf(h.dauer,0)} s, Streuung ${nf(h.cv*100,1)} %${u?', '+nf(u,0)+' % zulässig':''}${h.quelle==='Testsignal'?', Testsignal':''}</small></div>
+      <button class="btn danger" data-a="delh" data-id="${h.id}" aria-label="Messung löschen">Löschen</button></div>`; }).join('')}</div>`
+    :`<div class="note">Für dieses Projekt sind noch keine Messungen gespeichert.</div>`;
+}
+
+// ===== Ansicht: Projekte =====
+function vProjects(){
+  header('Projekte',true);
+  $('app').innerHTML=`<div class="list">${store.projects.map(p=>`<div class="item"><div class="grow"><b>${esc(p.name)}</b><small>${esc(p.nummer||'')}, ${p.cables.length} Seile</small></div>
+    ${p.id===store.active?'<span class="q ok">aktiv</span>':`<button class="btn" data-a="activate" data-id="${p.id}">Öffnen</button>`}</div>`).join('')}</div>
+  <div class="tbar"><button class="btn" data-a="newproj">Neues Projekt</button><button class="btn" data-a="importproj">Projekt laden (JSON)</button></div>
+  <input type="file" id="fileinp" accept=".json,application/json" hidden>
+  <p class="small muted">Projekte und Messergebnisse werden nur in diesem Browser gespeichert. Zum Sichern oder Übertragen auf ein anderes Handy das Projekt unter „Projekt bearbeiten“ als JSON speichern.</p>`;
+}
+function vEdit(){
+  const p=proj(); header('Projekt bearbeiten',true); const ec=view.cableId?p.cables.find(c=>c.id===view.cableId):null;
+  const fld=(k,l,v,t='number',st='any')=>`<div><label class="f" for="f_${k}">${l}</label><input id="f_${k}" ${t==='number'?`type="number" step="${st}" inputmode="decimal"`:'type="text"'} value="${t==='number'?esc(v??''):(v??'')}"></div>`;
+  $('app').innerHTML=`
+  <div class="panel">
+    ${fld('pname','Projektname',esc(p.name),'text')}${fld('pnr','Projektnummer',esc(p.nummer||''),'text')}
+    <div class="row" style="margin-top:10px"><button class="btn primary" data-a="saveproj">Projektdaten übernehmen</button></div>
+  </div>
+  <h2>Seile</h2>
+  <div class="list">${p.cables.slice().sort((a,b)=>(a.seite+a.nr).localeCompare(b.seite+b.nr,'de',{numeric:true})).map(c=>`<div class="item"><div class="grow"><b>${esc(c.id)}</b><small>Typ ${esc(c.typ)}, L ${nf(c.L,2)} m, m ${nf(c.m,2)} kg/m, f1 ${c.f1?nf(c.f1,2)+' Hz':'–'}</small></div><button class="btn" data-a="editcab" data-id="${esc(c.id)}">Ändern</button></div>`).join('')}</div>
+  <div class="row" style="margin-top:8px"><button class="btn" data-a="editcab" data-id="">Seil hinzufügen</button></div>
+  ${view.cableId!==undefined?`<h2 id="cabform">${ec?'Seil '+esc(ec.id)+' ändern':'Neues Seil'}</h2>
+  <div class="panel"><div class="formgrid">
+    ${fld('id','Bezeichnung (z. B. O8)',esc(ec?.id||''),'text')}${fld('typ','Seiltyp',esc(ec?.typ||''),'text')}
+    ${fld('seite','Seite (O oder U)',esc(ec?.seite||''),'text')}${fld('feld','Feld',esc(ec?.feld||''),'text')}
+    ${fld('L','Länge L [m]',ec?.L)}${fld('m','Masse m [kg/m]',ec?.m)}
+    ${fld('E','E-Modul E [N/m²]',ec?.E)}${fld('I','Trägheitsmoment I [m⁴]',ec?.I)}
+    ${fld('draehte','Anzahl Drähte',ec?.draehte,'number','1')}${fld('f1','erwartete Grundfrequenz [Hz]',ec?.f1)}
+    ${fld('zul','zulässige Kraft [kN]',ec?.zul)}${fld('verkehr','Anteil Verkehr [kN]',ec?.verkehr)}
+    ${fld('soll','planmäßige Kraft SOLL [kN]',ec?.soll)}${fld('ref','Bezugswert [kN]',ec?.ref)}
+  </div>
+  <p class="small muted">Pflicht sind Bezeichnung, Länge, Masse, E und I. Die erwartete Grundfrequenz grenzt die Suche ein und verhindert Fehlbestimmungen; ohne Angabe wird zwischen 0,3 und 8 Hz gesucht.</p>
+  <div class="row"><button class="btn primary" data-a="savecab" data-orig="${esc(ec?.id||'')}">Seil speichern</button>${ec?`<button class="btn danger" data-a="delcab" data-id="${esc(ec.id)}">Seil löschen</button>`:''}</div></div>`:''}
+  <h2>Projekt</h2>
+  <div class="tbar"><button class="btn" data-a="exportproj">Projekt speichern (JSON)</button><button class="btn" data-a="dupproj">Projekt kopieren</button></div>
+  <div class="row"><button class="btn danger" data-a="delproj">Projekt löschen</button></div>
+  ${p.hinweis?`<p class="small muted" style="margin-top:12px">${esc(p.hinweis)}</p>`:''}`;
+  if(view.cableId!==undefined) setTimeout(()=>$('cabform')&&$('cabform').scrollIntoView(),0);
+}
+const num=id=>{ const v=$('f_'+id).value.trim().replace(',','.'); return v===''?null:+v; };
+
+// Importierte Projektdateien prüfen: nur bekannte Felder, Zahlen als Zahlen, Texte als Texte
+function sanitizeProject(o){
+  if(!o||typeof o!=='object'||!Array.isArray(o.cables)) throw new Error('kein Projekt');
+  const S=v=>v==null?'':String(v).slice(0,200);
+  const N=v=>{ if(v==null||v==='') return null; const x=Number(v); return isFinite(x)?x:null; };
+  const cables=o.cables.slice(0,500).map(c=>{ const id=S(c&&c.id).replace(/[^\w.\-]/g,'').slice(0,20);
+    return {id,seite:S(c.seite).slice(0,2),nr:N(c.nr)??(parseInt(id.replace(/\D+/g,''))||0),feld:S(c.feld).slice(0,40),typ:S(c.typ).slice(0,20),
+      draehte:N(c.draehte),m:N(c.m),L:N(c.L),E:N(c.E),I:N(c.I),f1:N(c.f1),soll:N(c.soll),zul:N(c.zul),verkehr:N(c.verkehr),f2021:N(c.f2021),ref:N(c.ref)}; })
+    .filter(c=>c.id&&c.L>0&&c.m>0&&c.E>0&&c.I>0);
+  return {id:'p'+Date.now(),builtin:false,name:S(o.name)||'Importiertes Projekt',nummer:S(o.nummer),hinweis:S(o.hinweis).slice(0,500),cables};
+}
+
+// ===== Ereignisse =====
+document.addEventListener('click',async e=>{
+  const b=e.target.closest('[data-a]'); if(!b) return; const a=b.dataset.a, id=b.dataset.id;
+  const p=proj();
+  switch(a){
+    case 'back': if(view.name==='measure'){ stopMeasurement(true); meas=null; go({name:'cable',id:view.id}); } else if(view.name==='cable'||view.name==='history'||view.name==='projects'||view.name==='edit') go({name:'cables'}); break;
+    case 'home': meas=null; go({name:'cables'}); break;
+    case 'cable': go({name:'cable',id}); break;
+    case 'dur': duration=+b.dataset.v; vCable(); break;
+    case 'start': startMeasurement(false); break;
+    case 'sim': startMeasurement(true); break;
+    case 'stop': finishMeasurement(); break;
+    case 'again': { const cid=meas.cable.id; meas=null; go({name:'cable',id:cid}); break; }
+    case 'saveraw': if(meas) saveFile(`Seilkraft_${meas.cable.id}_${stamp(meas.start)}_Rohdaten.csv`,csvRaw()); break;
+    case 'saveres': if(meas&&meas.saved) saveFile(`Seilkraft_${meas.cable.id}_${stamp(meas.start)}_Ergebnis.csv`,csvResults([meas.saved])); else toast('Kein Ergebnis vorhanden.'); break;
+    case 'history': go({name:'history'}); break;
+    case 'exportall': saveFile(`Seilkraft_${(p.nummer||p.name).replace(/[^\w.-]+/g,'_')}_Ergebnisse_${stamp()}.csv`,csvResults(store.history.filter(h=>h.projectId===p.id).sort((x,y)=>x.start.localeCompare(y.start)))); break;
+    case 'delh': if(confirm('Diese Messung löschen?')){ store.history=store.history.filter(h=>h.id!==id); persist(); vHistory(); } break;
+    case 'projects': if(view.name!=='measure') go({name:'projects'}); break;
+    case 'activate': store.active=id; persist(); go({name:'cables'}); break;
+    case 'newproj': { const n=prompt('Name des neuen Projekts'); if(!n) break; const np={id:'p'+Date.now(),name:n,nummer:'',cables:[]}; store.projects.push(np); store.active=np.id; persist(); go({name:'edit'}); break; }
+    case 'importproj': $('fileinp').onchange=async ev=>{ const f=ev.target.files[0]; if(!f) return;
+        try{ const o=sanitizeProject(JSON.parse(await f.text())); store.projects.push(o); store.active=o.id; persist(); go({name:'cables'}); toast('Projekt geladen: '+o.name); }
+        catch(err){ toast('Die Datei ist kein gültiges Projekt.'); } };
+      $('fileinp').click(); break;
+    case 'edit': go({name:'edit'}); break;
+    case 'saveproj': p.name=$('f_pname').value.trim()||p.name; p.nummer=$('f_pnr').value.trim(); persist(); vEdit(); toast('Projektdaten übernommen.'); break;
+    case 'editcab': view={name:'edit',cableId:id}; vEdit(); break;
+    case 'savecab': {
+      const cid=$('f_id').value.trim(); const c={id:cid,typ:$('f_typ').value.trim(),seite:$('f_seite').value.trim().toUpperCase()||cid[0]||'',feld:$('f_feld').value.trim(),
+        L:num('L'),m:num('m'),E:num('E'),I:num('I'),draehte:num('draehte'),f1:num('f1'),zul:num('zul'),verkehr:num('verkehr'),soll:num('soll'),ref:num('ref')};
+      c.nr=parseInt(cid.replace(/\D+/g,''))||0;
+      if(!cid||!(c.L>0)||!(c.m>0)||!(c.E>0)||!(c.I>0)){ toast('Bitte Bezeichnung, Länge, Masse, E und I angeben.'); break; }
+      const orig=b.dataset.orig; const old=orig?p.cables.find(x=>x.id===orig):null;
+      if(!old&&p.cables.some(x=>x.id===cid)){ toast('Ein Seil mit dieser Bezeichnung gibt es bereits.'); break; }
+      if(old){ if(orig!==cid&&p.cables.some(x=>x.id===cid)){ toast('Ein Seil mit dieser Bezeichnung gibt es bereits.'); break; } c.f2021=old.f2021; Object.assign(old,c); } else p.cables.push(c);
+      persist(); view={name:'edit'}; vEdit(); toast('Seil '+cid+' gespeichert.'); break; }
+    case 'delcab': if(confirm('Seil '+id+' löschen?')){ p.cables=p.cables.filter(c=>c.id!==id); persist(); view={name:'edit'}; vEdit(); } break;
+    case 'exportproj': saveFile(`Projekt_${(p.nummer||p.name).replace(/[^\w.-]+/g,'_')}.json`,JSON.stringify({name:p.name,nummer:p.nummer,hinweis:p.hinweis||'',cables:p.cables},null,1)); break;
+    case 'dupproj': { const cp=JSON.parse(JSON.stringify(p)); cp.id='p'+Date.now(); cp.builtin=false; cp.name=p.name+' (Kopie)'; store.projects.push(cp); store.active=cp.id; persist(); vEdit(); toast('Kopie angelegt.'); break; }
+    case 'delproj': if(store.projects.length<2){ toast('Das letzte Projekt kann nicht gelöscht werden.'); break; }
+      if(confirm('Projekt „'+p.name+'“ mit allen Seilen löschen? Gespeicherte Messungen bleiben erhalten.')){ store.projects=store.projects.filter(x=>x.id!==p.id); store.active=store.projects[0].id; persist(); go({name:'cables'}); } break;
+  }
+});
+window.addEventListener('resize',()=>{ if(meas&&meas.last&&meas.last.sp) drawSpectrum(meas.last,meas.cable); });
+render();
+</script>
+</body>
+</html>
